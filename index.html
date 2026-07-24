@@ -35,35 +35,42 @@
         
         <!-- Camera Section -->
         <div class="relative bg-black rounded-xl overflow-hidden shadow-lg aspect-[4/3] flex items-center justify-center border-2 border-slate-300">
-            <!-- NOTA: Se añadió el atributo 'muted' que es obligatorio en iOS Safari para el autoplay -->
+            
             <video id="video" autoplay playsinline muted class="w-full h-full object-cover"></video>
             <canvas id="canvas" class="hidden"></canvas>
             
-            <!-- Crosshair Overlay -->
-            <div class="absolute inset-0 pointer-events-none border-[40px] border-black/40 flex items-center justify-center">
-                <div class="w-full h-16 border-2 border-dashed border-red-500 rounded-lg"></div>
+            <!-- Crosshair Overlay (Zona de lectura) -->
+            <div class="absolute inset-0 pointer-events-none flex items-center justify-center">
+                <!-- Oscurecemos los bordes para guiar al usuario -->
+                <div class="absolute inset-0 bg-black/50"></div>
+                <!-- Cuadro de enfoque claro -->
+                <div class="relative w-[80%] h-[35%] border-2 border-dashed border-red-500 rounded-lg shadow-[0_0_0_9999px_rgba(0,0,0,0.5)] bg-transparent z-10 flex items-center justify-center">
+                    <span class="text-red-500/50 text-xs font-bold tracking-widest uppercase">Alinea la etiqueta aquí</span>
+                </div>
+            </div>
+
+            <!-- Start Camera Button (CRÍTICO PARA iOS) -->
+            <div id="start-camera-overlay" class="absolute inset-0 bg-slate-900 text-white flex flex-col items-center justify-center z-30">
+                <button id="start-camera-btn" class="bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg flex items-center gap-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path></svg>
+                    Turn On Camera
+                </button>
+                <p class="text-xs text-slate-400 mt-4 text-center px-4">Tap to grant camera access.<br>Required by iOS Safari.</p>
             </div>
 
             <!-- Loading State -->
-            <div id="loading-overlay" class="absolute inset-0 bg-black/70 text-white flex flex-col items-center justify-center hidden z-20">
+            <div id="loading-overlay" class="absolute inset-0 bg-black/80 text-white flex flex-col items-center justify-center hidden z-40">
                 <svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-white mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                <p class="animate-pulse font-medium">Analizando etiqueta...</p>
-            </div>
-            
-            <!-- Camera Error State -->
-            <div id="camera-error" class="absolute inset-0 bg-slate-900 text-white flex flex-col items-center justify-center hidden p-4 text-center z-10">
-                <p class="text-sm mb-2">Camera access denied or unavailable.</p>
-                <p class="text-xs text-slate-400">Please check your Settings > Safari > Camera</p>
-                <button onclick="initCamera()" class="mt-4 bg-blue-500 px-4 py-2 rounded text-sm">Retry</button>
+                <p class="animate-pulse font-medium">Leyendo etiqueta...</p>
             </div>
         </div>
 
         <!-- OCR Trigger Button -->
-        <button id="capture-btn" class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-4 px-4 rounded-xl shadow-lg transition-transform transform active:scale-95 flex items-center justify-center gap-2">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+        <button id="capture-btn" disabled class="bg-slate-400 text-white font-bold py-4 px-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
             Escanear Etiqueta
         </button>
 
@@ -122,10 +129,8 @@
     <script>
         // --- 1. Dynamic PWA Generation ---
         
-        // Base64 SVG Icon for PWA Manifest
         const svgIcon = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzI1NjNlYiIgcng9IjIwIi8+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iMjUiIGZpbGw9IiNmZmZmZmYiLz48L3N2Zz4=`;
         
-        // Build Manifest JSON
         const manifest = {
             name: "Smart Market Scanner",
             short_name: "Scanner",
@@ -134,59 +139,34 @@
             display: "standalone",
             background_color: "#f1f5f9",
             theme_color: "#2563eb",
-            icons: [
-                {
-                    src: svgIcon,
-                    sizes: "192x192 512x512",
-                    type: "image/svg+xml",
-                    purpose: "any maskable"
-                }
-            ]
+            icons: [{ src: svgIcon, sizes: "192x192 512x512", type: "image/svg+xml", purpose: "any maskable" }]
         };
 
-        // Inject Manifest Blob
         const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-        const manifestUrl = URL.createObjectURL(manifestBlob);
-        document.getElementById('manifest-link').href = manifestUrl;
+        document.getElementById('manifest-link').href = URL.createObjectURL(manifestBlob);
         document.getElementById('apple-touch-icon').href = svgIcon;
 
-        // Build and Register Service Worker for PWA compliance
         const swCode = `
-            const CACHE_NAME = 'scanner-v1';
-            self.addEventListener('install', event => {
-                self.skipWaiting();
-            });
-            self.addEventListener('activate', event => {
-                event.waitUntil(clients.claim());
-            });
-            self.addEventListener('fetch', event => {
-                // Network-first strategy for a single-file app
-                event.respondWith(
-                    fetch(event.request).catch(() => caches.match(event.request))
-                );
-            });
+            self.addEventListener('install', e => self.skipWaiting());
+            self.addEventListener('activate', e => e.waitUntil(clients.claim()));
+            self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => caches.match(e.request))));
         `;
         const swBlob = new Blob([swCode], { type: 'application/javascript' });
-        const swUrl = URL.createObjectURL(swBlob);
-
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register(swUrl).then(registration => {
-                console.log('ServiceWorker registered successfully.');
+            navigator.serviceWorker.register(URL.createObjectURL(swBlob)).then(() => {
                 document.getElementById('install-badge').classList.remove('hidden');
-            }).catch(error => {
-                console.error('ServiceWorker registration failed:', error);
             });
         }
 
 
         // --- 2. Application Logic ---
 
-        // DOM Elements
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const captureBtn = document.getElementById('capture-btn');
+        const startCameraBtn = document.getElementById('start-camera-btn');
+        const startCameraOverlay = document.getElementById('start-camera-overlay');
         const loadingOverlay = document.getElementById('loading-overlay');
-        const cameraError = document.getElementById('camera-error');
 
         const productNameInput = document.getElementById('product-name');
         const productPriceInput = document.getElementById('product-price');
@@ -198,134 +178,123 @@
         const taxDisplay = document.getElementById('tax-display');
         const totalDisplay = document.getElementById('total-display');
 
-        // State Management
         let cart = JSON.parse(localStorage.getItem('market_cart')) || [];
 
-        // Camera Initialization
-        async function initCamera() {
-            cameraError.classList.add('hidden');
+        // Camera Initialization triggered by user click (iOS requirement)
+        startCameraBtn.addEventListener('click', async () => {
             try {
-                // Request environment (back) camera
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
-                        facingMode: { ideal: "environment" },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    },
+                // Configuración relajada para no provocar OverconstrainedError en iOS
+                const constraints = {
+                    video: { facingMode: "environment" },
                     audio: false
-                });
+                };
+                
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
                 
-                // Forzar reproducción para iOS Safari
-                video.onloadedmetadata = () => {
-                    video.play().catch(e => console.error("Error playing video:", e));
-                };
-            } catch (err) {
-                console.error("Camera initialization failed:", err);
-                cameraError.classList.remove('hidden');
+                // Asegurar que inicie
+                await video.play();
                 
-                // Fallback attempt for standard camera if environment fails
-                try {
-                    const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
-                    video.srcObject = fallbackStream;
-                    video.onloadedmetadata = () => {
-                        video.play().catch(e => console.error("Error playing fallback video:", e));
-                    };
-                    cameraError.classList.add('hidden');
-                } catch (fallbackErr) {
-                    console.error("Fallback camera failed:", fallbackErr);
-                }
+                // Ocultar overlay inicial y activar botón de escaneo
+                startCameraOverlay.classList.add('hidden');
+                captureBtn.disabled = false;
+                captureBtn.classList.remove('bg-slate-400');
+                captureBtn.classList.add('bg-blue-600', 'hover:bg-blue-700', 'active:bg-blue-800');
+
+            } catch (err) {
+                console.error("Error de cámara:", err);
+                alert("No se pudo iniciar la cámara. Por favor verifica Settings > Safari > Camera.");
             }
-        }
+        });
 
-        // Initialize camera on load
-        window.addEventListener('load', initCamera);
-
-        // Capture & OCR Process
+        // Capture & OCR Process with Cropping
         captureBtn.addEventListener('click', async () => {
-            // Si la cámara no arrancó, intentar arrancarla de nuevo al presionar el botón
-            if (!video.videoWidth || !video.srcObject) {
-                await initCamera();
-                if (!video.videoWidth) {
-                    alert("Por favor permite el acceso a la cámara o recarga la página.");
-                    return;
-                }
-            }
+            if (!video.videoWidth) return;
 
-            // Draw video frame to canvas
+            // 1. Dibujar el fotograma completo en el canvas original
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             const context = canvas.getContext('2d');
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            // 2. RECORTAR (CROP) solo la zona del cuadro rojo (80% ancho, 35% alto, al centro)
+            const cropWidth = canvas.width * 0.8;
+            const cropHeight = canvas.height * 0.35;
+            const cropX = (canvas.width - cropWidth) / 2;
+            const cropY = (canvas.height - cropHeight) / 2;
+
+            const cropCanvas = document.createElement('canvas');
+            cropCanvas.width = cropWidth;
+            cropCanvas.height = cropHeight;
+            const cropCtx = cropCanvas.getContext('2d');
             
-            // Show loading UI
+            // Dibujar solo la porción recortada en el nuevo canvas
+            cropCtx.drawImage(canvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+            
+            const imageDataUrl = cropCanvas.toDataURL('image/jpeg', 1.0);
+            
             loadingOverlay.classList.remove('hidden');
             captureBtn.disabled = true;
 
             try {
-                // Use Tesseract to read text (Spanish + English)
+                // Tesseract lee la imagen recortada
                 const result = await Tesseract.recognize(
                     imageDataUrl,
                     'spa+eng',
-                    { 
-                        logger: m => console.log(m) // Logs progress
-                    }
+                    { logger: m => console.log(m.status, Math.round(m.progress * 100) + "%") }
                 );
                 
                 parseOCRText(result.data.text);
             } catch (error) {
                 console.error("OCR Error:", error);
-                alert("Ocurrió un error al leer la imagen. Intenta de nuevo.");
+                alert("Ocurrió un error al leer la imagen.");
             } finally {
-                // Hide loading UI
                 loadingOverlay.classList.add('hidden');
                 captureBtn.disabled = false;
             }
         });
 
-        // Parse OCR Output
+        // Parse OCR Output mejorado
         function parseOCRText(text) {
-            console.log("Raw OCR Text:", text);
+            console.log("Texto Crudo OCR:", text);
             
-            // Split by lines and remove empty ones
             const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
             
             let detectedPrice = '';
             let detectedName = '';
 
-            // Regex to find price patterns (e.g. 3.99, $2.50, 1,45)
-            const priceRegex = /\b\d+[.,]\d{2}\b/;
+            // Regex mejorado: Busca secuencias numéricas con punto o coma, 
+            // opcionalmente precedidas por $ o S (error común de OCR)
+            const priceRegex = /(?:[\$S\s]|^)(\d+[.,]\d{2})\b/;
 
             for (let line of lines) {
+                // Buscar precio
                 if (!detectedPrice && priceRegex.test(line)) {
                     const match = line.match(priceRegex);
-                    // Standardize decimal separator
-                    detectedPrice = match[0].replace(',', '.'); 
-                } else if (!detectedName && line.length > 3 && !priceRegex.test(line)) {
-                    // Grab the first substantial string as the name
-                    // Clean up common OCR noise characters
-                    detectedName = line.replace(/[^a-zA-Z0-9\s]/g, '').trim();
+                    if (match && match[1]) {
+                        detectedPrice = match[1].replace(',', '.'); // Estandarizar a punto decimal
+                    }
+                } 
+                // Buscar nombre (asumimos que la línea más larga sin números puros es el nombre)
+                else if (!detectedName && line.length > 4 && !priceRegex.test(line)) {
+                    // Limpiar caracteres extraños que Tesseract a veces inventa
+                    detectedName = line.replace(/[^a-zA-Z0-9\s%\-&]/g, '').trim();
                 }
             }
 
-            // Populate Inputs
             productNameInput.value = detectedName || '';
             productPriceInput.value = detectedPrice || '';
-            
-            // Smooth scroll to form
             productNameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
         // Cart Management
         addBtn.addEventListener('click', () => {
-            const name = productNameInput.value.trim();
+            const name = productNameInput.value.trim() || 'Artículo Escaneado';
             const price = parseFloat(productPriceInput.value);
             const taxRate = parseFloat(productTaxSelect.value);
 
-            if (!name || isNaN(price) || price <= 0) {
-                alert("Por favor asegúrate de tener un nombre y un precio válido.");
+            if (isNaN(price) || price <= 0) {
+                alert("Por favor asegúrate de tener un precio válido.");
                 return;
             }
 
@@ -342,11 +311,8 @@
             cart.push(item);
             updateCartUI();
             
-            // Reset inputs
             productNameInput.value = '';
             productPriceInput.value = '';
-            
-            // Scroll to cart
             itemsList.parentElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         });
 
@@ -366,9 +332,7 @@
             let totalTax = 0;
             let grandTotal = 0;
 
-            // Render list items backwards (newest on top)
             [...cart].reverse().forEach((item, reversedIndex) => {
-                // Calculate original index for deletion
                 const originalIndex = cart.length - 1 - reversedIndex;
                 
                 subtotal += item.price;
@@ -378,7 +342,6 @@
                 const row = document.createElement('div');
                 row.className = 'flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100 shadow-sm';
                 
-                // Format tax label
                 let taxLabel = 'Exento';
                 if (item.taxRate === 0.115) taxLabel = '11.5%';
                 if (item.taxRate === 0.07) taxLabel = '7%';
@@ -398,22 +361,17 @@
                 itemsList.appendChild(row);
             });
 
-            // Update Totals
             subtotalDisplay.textContent = `$${subtotal.toFixed(2)}`;
             taxDisplay.textContent = `$${totalTax.toFixed(2)}`;
             totalDisplay.textContent = `$${grandTotal.toFixed(2)}`;
-
-            // Persist to local storage
             localStorage.setItem('market_cart', JSON.stringify(cart));
         }
 
-        // Global remove function for inline onclick handler
         window.removeItem = function(index) {
             cart.splice(index, 1);
             updateCartUI();
         }
 
-        // Initial UI Render
         updateCartUI();
 
     </script>
