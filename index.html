@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Smart Market Scanner</title>
+    
+    <!-- Tailwind CSS for UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Tesseract.js for OCR -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+    <!-- Dynamic PWA Manifest Link -->
+    <link id="manifest-link" rel="manifest">
+    
+    <!-- iOS PWA Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Scanner">
+    
+    <!-- Dynamic Favicon/Apple Icon -->
+    <link id="apple-touch-icon" rel="apple-touch-icon">
+</head>
+<body class="bg-slate-100 text-slate-800 h-screen flex flex-col overflow-hidden font-sans">
+
+    <!-- Header -->
+    <header class="bg-blue-600 text-white p-4 shadow-md flex justify-between items-center z-10 shrink-0 pb-safe">
+        <h1 class="text-xl font-bold tracking-wide">Market Scanner</h1>
+        <div id="install-badge" class="hidden text-xs bg-white text-blue-600 px-2 py-1 rounded-full font-bold">PWA Ready</div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 overflow-y-auto w-full max-w-md mx-auto p-4 flex flex-col gap-4 pb-20">
+        
+        <!-- Camera Section -->
+        <div class="relative bg-black rounded-xl overflow-hidden shadow-lg aspect-[4/3] flex items-center justify-center border-2 border-slate-300">
+            <video id="video" autoplay playsinline class="w-full h-full object-cover"></video>
+            <canvas id="canvas" class="hidden"></canvas>
+            
+            <!-- Crosshair Overlay -->
+            <div class="absolute inset-0 pointer-events-none border-[40px] border-black/40 flex items-center justify-center">
+                <div class="w-full h-16 border-2 border-dashed border-red-500 rounded-lg"></div>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading-overlay" class="absolute inset-0 bg-black/70 text-white flex flex-col items-center justify-center hidden z-20">
+                <svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-white mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <p class="animate-pulse font-medium">Analizando etiqueta...</p>
+            </div>
+            
+            <!-- Camera Error State -->
+            <div id="camera-error" class="absolute inset-0 bg-slate-900 text-white flex flex-col items-center justify-center hidden p-4 text-center z-10">
+                <p class="text-sm mb-2">Camera access denied or unavailable.</p>
+                <p class="text-xs text-slate-400">Please check your Settings > Safari > Camera</p>
+                <button onclick="initCamera()" class="mt-4 bg-blue-500 px-4 py-2 rounded text-sm">Retry</button>
+            </div>
+        </div>
+
+        <!-- OCR Trigger Button -->
+        <button id="capture-btn" class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-4 px-4 rounded-xl shadow-lg transition-transform transform active:scale-95 flex items-center justify-center gap-2">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            Escanear Etiqueta
+        </button>
+
+        <!-- Product Details Form -->
+        <div class="bg-white p-5 rounded-xl shadow-md flex flex-col gap-4">
+            <h2 class="font-bold text-slate-700 border-b pb-2 flex items-center gap-2">
+                <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                Datos del Artículo
+            </h2>
+            
+            <div>
+                <label class="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Nombre del Producto</label>
+                <input type="text" id="product-name" class="w-full border-2 border-slate-200 rounded-lg p-3 text-base focus:outline-none focus:border-blue-500 transition-colors" placeholder="Ej: Café Molido">
+            </div>
+            
+            <div class="flex gap-3">
+                <div class="flex-1">
+                    <label class="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Precio ($)</label>
+                    <input type="number" step="0.01" id="product-price" class="w-full border-2 border-slate-200 rounded-lg p-3 text-base focus:outline-none focus:border-blue-500 transition-colors" placeholder="0.00">
+                </div>
+                <div class="flex-1">
+                    <label class="block text-xs font-bold text-slate-500 mb-1 tracking-wider uppercase">Tasa de IVU</label>
+                    <select id="product-tax" class="w-full border-2 border-slate-200 rounded-lg p-3 text-sm bg-white focus:outline-none focus:border-blue-500 transition-colors">
+                        <option value="0.115">11.5% (General)</option>
+                        <option value="0.07">7.0% (Alim. Prep)</option>
+                        <option value="0.0">0.0% (Exento)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <button id="add-btn" class="bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors mt-2">
+                Agregar al Carrito
+            </button>
+        </div>
+
+        <!-- Cart Summary -->
+        <div class="bg-white p-5 rounded-xl shadow-md flex flex-col gap-3">
+            <h2 class="font-bold text-slate-700 border-b pb-2 flex items-center gap-2">
+                <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                Carrito de Compras
+            </h2>
+            
+            <div id="items-list" class="flex flex-col gap-2 max-h-48 overflow-y-auto text-sm pr-1">
+                <p class="text-slate-400 text-center py-4 italic">El carrito está vacío</p>
+            </div>
+            
+            <div class="border-t-2 border-slate-100 pt-3 flex flex-col gap-2 text-sm font-medium mt-2">
+                <div class="flex justify-between text-slate-600"><span>Subtotal:</span> <span id="subtotal-display">$0.00</span></div>
+                <div class="flex justify-between text-slate-600"><span>IVU Total:</span> <span id="tax-display">$0.00</span></div>
+                <div class="flex justify-between text-xl font-black text-slate-800 mt-1"><span>Total Neto:</span> <span id="total-display">$0.00</span></div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // --- 1. Dynamic PWA Generation ---
+        
+        // Base64 SVG Icon for PWA Manifest
+        const svgIcon = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzI1NjNlYiIgcng9IjIwIi8+PGNpcmNsZSBjeD0iNTAiIGN5PSI1MCIgcj0iMjUiIGZpbGw9IiNmZmZmZmYiLz48L3N2Zz4=`;
+        
+        // Build Manifest JSON
+        const manifest = {
+            name: "Smart Market Scanner",
+            short_name: "Scanner",
+            description: "OCR Grocery Scanner & Tax Calculator",
+            start_url: location.href,
+            display: "standalone",
+            background_color: "#f1f5f9",
+            theme_color: "#2563eb",
+            icons: [
+                {
+                    src: svgIcon,
+                    sizes: "192x192 512x512",
+                    type: "image/svg+xml",
+                    purpose: "any maskable"
+                }
+            ]
+        };
+
+        // Inject Manifest Blob
+        const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+        const manifestUrl = URL.createObjectURL(manifestBlob);
+        document.getElementById('manifest-link').href = manifestUrl;
+        document.getElementById('apple-touch-icon').href = svgIcon;
+
+        // Build and Register Service Worker for PWA compliance
+        const swCode = `
+            const CACHE_NAME = 'scanner-v1';
+            self.addEventListener('install', event => {
+                self.skipWaiting();
+            });
+            self.addEventListener('activate', event => {
+                event.waitUntil(clients.claim());
+            });
+            self.addEventListener('fetch', event => {
+                // Network-first strategy for a single-file app
+                event.respondWith(
+                    fetch(event.request).catch(() => caches.match(event.request))
+                );
+            });
+        `;
+        const swBlob = new Blob([swCode], { type: 'application/javascript' });
+        const swUrl = URL.createObjectURL(swBlob);
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register(swUrl).then(registration => {
+                console.log('ServiceWorker registered successfully.');
+                document.getElementById('install-badge').classList.remove('hidden');
+            }).catch(error => {
+                console.error('ServiceWorker registration failed:', error);
+            });
+        }
+
+
+        // --- 2. Application Logic ---
+
+        // DOM Elements
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const captureBtn = document.getElementById('capture-btn');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const cameraError = document.getElementById('camera-error');
+
+        const productNameInput = document.getElementById('product-name');
+        const productPriceInput = document.getElementById('product-price');
+        const productTaxSelect = document.getElementById('product-tax');
+        const addBtn = document.getElementById('add-btn');
+
+        const itemsList = document.getElementById('items-list');
+        const subtotalDisplay = document.getElementById('subtotal-display');
+        const taxDisplay = document.getElementById('tax-display');
+        const totalDisplay = document.getElementById('total-display');
+
+        // State Management
+        let cart = JSON.parse(localStorage.getItem('market_cart')) || [];
+
+        // Camera Initialization
+        async function initCamera() {
+            cameraError.classList.add('hidden');
+            try {
+                // Request environment (back) camera
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: { ideal: "environment" },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                });
+                video.srcObject = stream;
+            } catch (err) {
+                console.error("Camera initialization failed:", err);
+                cameraError.classList.remove('hidden');
+                
+                // Fallback attempt for standard camera if environment fails
+                try {
+                    const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    video.srcObject = fallbackStream;
+                    cameraError.classList.add('hidden');
+                } catch (fallbackErr) {
+                    console.error("Fallback camera failed:", fallbackErr);
+                }
+            }
+        }
+
+        // Initialize camera on load
+        window.addEventListener('load', initCamera);
+
+        // Capture & OCR Process
+        captureBtn.addEventListener('click', async () => {
+            if (!video.videoWidth) {
+                alert("Camera not ready yet.");
+                return;
+            }
+
+            // Draw video frame to canvas
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const context = canvas.getContext('2d');
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            
+            // Show loading UI
+            loadingOverlay.classList.remove('hidden');
+            captureBtn.disabled = true;
+
+            try {
+                // Use Tesseract to read text (Spanish + English)
+                const result = await Tesseract.recognize(
+                    imageDataUrl,
+                    'spa+eng',
+                    { 
+                        logger: m => console.log(m) // Logs progress
+                    }
+                );
+                
+                parseOCRText(result.data.text);
+            } catch (error) {
+                console.error("OCR Error:", error);
+                alert("Ocurrió un error al leer la imagen. Intenta de nuevo.");
+            } finally {
+                // Hide loading UI
+                loadingOverlay.classList.add('hidden');
+                captureBtn.disabled = false;
+            }
+        });
+
+        // Parse OCR Output
+        function parseOCRText(text) {
+            console.log("Raw OCR Text:", text);
+            
+            // Split by lines and remove empty ones
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            
+            let detectedPrice = '';
+            let detectedName = '';
+
+            // Regex to find price patterns (e.g. 3.99, $2.50, 1,45)
+            const priceRegex = /\b\d+[.,]\d{2}\b/;
+
+            for (let line of lines) {
+                if (!detectedPrice && priceRegex.test(line)) {
+                    const match = line.match(priceRegex);
+                    // Standardize decimal separator
+                    detectedPrice = match[0].replace(',', '.'); 
+                } else if (!detectedName && line.length > 3 && !priceRegex.test(line)) {
+                    // Grab the first substantial string as the name
+                    // Clean up common OCR noise characters
+                    detectedName = line.replace(/[^a-zA-Z0-9\s]/g, '').trim();
+                }
+            }
+
+            // Populate Inputs
+            productNameInput.value = detectedName || '';
+            productPriceInput.value = detectedPrice || '';
+            
+            // Smooth scroll to form
+            productNameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // Cart Management
+        addBtn.addEventListener('click', () => {
+            const name = productNameInput.value.trim();
+            const price = parseFloat(productPriceInput.value);
+            const taxRate = parseFloat(productTaxSelect.value);
+
+            if (!name || isNaN(price) || price <= 0) {
+                alert("Por favor asegúrate de tener un nombre y un precio válido.");
+                return;
+            }
+
+            const taxAmount = price * taxRate;
+            const item = {
+                id: Date.now(),
+                name,
+                price,
+                taxRate,
+                taxAmount,
+                total: price + taxAmount
+            };
+
+            cart.push(item);
+            updateCartUI();
+            
+            // Reset inputs
+            productNameInput.value = '';
+            productPriceInput.value = '';
+            
+            // Scroll to cart
+            itemsList.parentElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+
+        function updateCartUI() {
+            itemsList.innerHTML = '';
+            
+            if (cart.length === 0) {
+                itemsList.innerHTML = '<p class="text-slate-400 text-center py-4 italic">El carrito está vacío</p>';
+                subtotalDisplay.textContent = '$0.00';
+                taxDisplay.textContent = '$0.00';
+                totalDisplay.textContent = '$0.00';
+                localStorage.removeItem('market_cart');
+                return;
+            }
+
+            let subtotal = 0;
+            let totalTax = 0;
+            let grandTotal = 0;
+
+            // Render list items backwards (newest on top)
+            [...cart].reverse().forEach((item, reversedIndex) => {
+                // Calculate original index for deletion
+                const originalIndex = cart.length - 1 - reversedIndex;
+                
+                subtotal += item.price;
+                totalTax += item.taxAmount;
+                grandTotal += item.total;
+
+                const row = document.createElement('div');
+                row.className = 'flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100 shadow-sm';
+                
+                // Format tax label
+                let taxLabel = 'Exento';
+                if (item.taxRate === 0.115) taxLabel = '11.5%';
+                if (item.taxRate === 0.07) taxLabel = '7%';
+
+                row.innerHTML = `
+                    <div class="flex-1">
+                        <p class="font-bold text-slate-700 leading-tight">${item.name}</p>
+                        <p class="text-xs text-slate-500 mt-0.5">$${item.price.toFixed(2)} + IVU (${taxLabel})</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="font-black text-blue-600">$${item.total.toFixed(2)}</span>
+                        <button onclick="removeItem(${originalIndex})" class="w-8 h-8 flex items-center justify-center bg-red-100 text-red-500 rounded-full hover:bg-red-200 active:bg-red-300 transition-colors" aria-label="Remover">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </div>
+                `;
+                itemsList.appendChild(row);
+            });
+
+            // Update Totals
+            subtotalDisplay.textContent = `$${subtotal.toFixed(2)}`;
+            taxDisplay.textContent = `$${totalTax.toFixed(2)}`;
+            totalDisplay.textContent = `$${grandTotal.toFixed(2)}`;
+
+            // Persist to local storage
+            localStorage.setItem('market_cart', JSON.stringify(cart));
+        }
+
+        // Global remove function for inline onclick handler
+        window.removeItem = function(index) {
+            cart.splice(index, 1);
+            updateCartUI();
+        }
+
+        // Initial UI Render
+        updateCartUI();
+
+    </script>
+</body>
+</html>
