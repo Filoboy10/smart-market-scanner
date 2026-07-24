@@ -35,7 +35,8 @@
         
         <!-- Camera Section -->
         <div class="relative bg-black rounded-xl overflow-hidden shadow-lg aspect-[4/3] flex items-center justify-center border-2 border-slate-300">
-            <video id="video" autoplay playsinline class="w-full h-full object-cover"></video>
+            <!-- NOTA: Se añadió el atributo 'muted' que es obligatorio en iOS Safari para el autoplay -->
+            <video id="video" autoplay playsinline muted class="w-full h-full object-cover"></video>
             <canvas id="canvas" class="hidden"></canvas>
             
             <!-- Crosshair Overlay -->
@@ -214,6 +215,11 @@
                     audio: false
                 });
                 video.srcObject = stream;
+                
+                // Forzar reproducción para iOS Safari
+                video.onloadedmetadata = () => {
+                    video.play().catch(e => console.error("Error playing video:", e));
+                };
             } catch (err) {
                 console.error("Camera initialization failed:", err);
                 cameraError.classList.remove('hidden');
@@ -222,6 +228,9 @@
                 try {
                     const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
                     video.srcObject = fallbackStream;
+                    video.onloadedmetadata = () => {
+                        video.play().catch(e => console.error("Error playing fallback video:", e));
+                    };
                     cameraError.classList.add('hidden');
                 } catch (fallbackErr) {
                     console.error("Fallback camera failed:", fallbackErr);
@@ -234,9 +243,13 @@
 
         // Capture & OCR Process
         captureBtn.addEventListener('click', async () => {
-            if (!video.videoWidth) {
-                alert("Camera not ready yet.");
-                return;
+            // Si la cámara no arrancó, intentar arrancarla de nuevo al presionar el botón
+            if (!video.videoWidth || !video.srcObject) {
+                await initCamera();
+                if (!video.videoWidth) {
+                    alert("Por favor permite el acceso a la cámara o recarga la página.");
+                    return;
+                }
             }
 
             // Draw video frame to canvas
@@ -406,3 +419,4 @@
     </script>
 </body>
 </html>
+
